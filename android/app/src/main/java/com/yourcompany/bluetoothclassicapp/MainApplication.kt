@@ -16,15 +16,23 @@ import com.facebook.soloader.SoLoader
 import expo.modules.ApplicationLifecycleDispatcher
 import expo.modules.ReactNativeHostWrapper
 
+// Add this import for RNShare
+import cl.json.RNSharePackage
+
 class MainApplication : Application(), ReactApplication {
 
   override val reactNativeHost: ReactNativeHost = ReactNativeHostWrapper(
         this,
         object : DefaultReactNativeHost(this) {
           override fun getPackages(): List<ReactPackage> {
-            val packages = PackageList(this).packages
-            // Packages that cannot be autolinked yet can be added manually here, for example:
+            val packages = PackageList(this).packages.toMutableList()
+            
+            // Add RNShare package manually
+            packages.add(RNSharePackage())
+            
+            // You can add other packages that cannot be autolinked here
             // packages.add(MyReactNativePackage())
+            
             return packages
           }
 
