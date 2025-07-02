@@ -96,5 +96,22 @@ export const settingStyles = StyleSheet.create({
   },
   tareButtonDisabled: {
     backgroundColor: '#a0c7ec', // Lighter blue for disabled
-  }
+  },
+  // Added for the Soft Reset button
+  softResetButton: {
+    backgroundColor: '#FF3B30', // Red for soft reset
+    marginTop: 10,
+    width: '100%',
+    borderRadius: 10,
+    paddingVertical: 14,
+    alignItems: 'center',
+  },
+  softResetButtonDisabled: {
+    backgroundColor: '#ffb3ab', // Lighter red for disabled
+  },
+  softResetButtonText: {
+    color: 'white',
+    fontWeight: 'bold',
+    fontSize: 16,
+  },
 });

@@ -219,6 +219,30 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                 onChangeText={(text) => handleInputChange('bluetooth_interval', text)}
               />
             </View>
+
+            {/* Soft Reset Button */}
+            <View style={settingStyles.settingItem}>
+              <TouchableOpacity
+                style={settingStyles.softResetButton}
+                onPress={async () => {
+                  if (!connectedDevice) {
+                    Alert.alert('Not Connected', 'Please connect to a device to send soft reset.');
+                    return;
+                  }
+                  addLog('Soft reset command to Arduino...');
+                  try {
+                    await sendCommand('RESET_SYSTEM');
+                    Alert.alert('Soft Reset Sent', 'Soft reset command sent to Arduino.');
+                    addLog('Soft reset command sent.');
+                  } catch (error) {
+                    addLog(`Failed to send soft reset: ${error instanceof Error ? error.message : 'Unknown error'}`);
+                    Alert.alert('Error', `Failed to send soft reset: ${error instanceof Error ? error.message : 'Unknown error'}`);
+                  }
+                }}
+              >
+                <Text style={settingStyles.softResetButtonText}>Soft Reset</Text>
+              </TouchableOpacity>
+            </View>
           </ScrollView>
 
           <View style={settingStyles.modalButtonContainer}>

@@ -4,6 +4,7 @@ import RNBluetoothClassic, { BluetoothDevice, BluetoothDeviceReadEvent } from 'r
 
 import DryingModal from './src/components/DryingModal';
 import { DryingProvider, useDrying } from './src/components/DryingProcessContext';
+import FileDownloadModal from './src/components/FileDownloadModal';
 import SettingsModal from './src/components/SettingsModal';
 import { commonStyles } from './src/styles/appStyles';
 
@@ -95,10 +96,11 @@ function MainAppContent() {
   const configBufferRef = useRef<string[]>([]);
   const isReceivingFileListRef = useRef(false);
   const fileListBufferRef = useRef<string[]>([]);
-  const isReceivingFileContentRef = useRef(false);
   const fileContentBufferRef = useRef<string[]>([]);
-  const currentDownloadingFilenameRef = useRef('');
-
+  const currentDownloadingFilenameRef = useRef<string>('');
+  const isReceivingFileContentRef = useRef<boolean>(false);
+  const [fileContentBuffer, setFileContentBuffer] = useState<string[]>([]);
+  
   // Function to add a log message to the activity log
   const addLog = useCallback((message: string) => {
     setLogMessages(prev => [`${new Date().toLocaleTimeString()}: ${message}`, ...prev.slice(0, 50)]);
@@ -331,30 +333,79 @@ function MainAppContent() {
         }
 
         if (isReceivingFileListRef.current && message.startsWith("FILE:")) {
-          fileListBufferRef.current.push(message.substring("FILE:".length));
+          const fileName = message.substring("FILE:".length).trim();
+          // Only add non-empty file names
+          if (fileName.length > 0) {
+            fileListBufferRef.current.push(fileName);
+            addLog(`Received file: ${fileName}`);
+          } else {
+            addLog("Received empty file name, skipping");
+          }
           return;
         }
 
-        // Handle File Content (now only logs receipt, no local save)
+        // Handle Arduino error responses for file operations
+        if (message.startsWith("ERROR:") && isReceivingFileListRef.current) {
+          isReceivingFileListRef.current = false;
+          addLog(`Arduino file error: ${message}`);
+          Alert.alert("File Error", `Arduino reported: ${message}`);
+          return;
+        }
+
+        // Handle File Content
         if (message.startsWith("FILE_CONTENT_START:")) {
           isReceivingFileContentRef.current = true;
           currentDownloadingFilenameRef.current = message.substring("FILE_CONTENT_START:".length).trim();
           fileContentBufferRef.current = [];
           addLog(`Arduino: Receiving content for ${currentDownloadingFilenameRef.current}`);
+          addLog(`DEBUG: File transfer started - waiting for data...`);
+          return;
+        }
+
+        // Handle file size information
+        if (message.startsWith("FILE_SIZE:") && isReceivingFileContentRef.current) {
+          const fileSize = message.substring("FILE_SIZE:".length).trim();
+          addLog(`Arduino: File size is ${fileSize} bytes`);
+          return;
+        }
+
+        // Handle progress updates
+        if (message.startsWith("PROGRESS:") && isReceivingFileContentRef.current) {
+          const progress = message.substring("PROGRESS:".length).trim();
+          addLog(`Arduino: Transfer progress ${progress}%`);
           return;
         }
 
         if (message === "FILE_CONTENT_END" && isReceivingFileContentRef.current) {
           isReceivingFileContentRef.current = false;
-          const fileContent = fileContentBufferRef.current.join('\n'); // Still buffer for completeness if needed later
-          addLog(`File '${currentDownloadingFilenameRef.current}' content received. (Not saved to phone)`);
-          fileContentBufferRef.current = [];
-          currentDownloadingFilenameRef.current = '';
+          addLog(`File '${currentDownloadingFilenameRef.current}' content received successfully. Total lines: ${fileContentBufferRef.current.length}`);
+          // Do NOT clear fileContentBufferRef.current or currentDownloadingFilenameRef.current here!
+          // Let the FileDownloadModal handle clearing after saving.
           return;
         }
 
         if (isReceivingFileContentRef.current) {
-          fileContentBufferRef.current.push(message); // Capture all lines for file content
+          // Debug: Log the first few messages to see what's being received
+          if (fileContentBufferRef.current.length < 3) {
+            addLog(`DEBUG: Raw message received: "${message}"`);
+          }
+          
+          // Only add non-protocol messages to the file content buffer
+          if (!message.startsWith("FILE_SIZE:") && !message.startsWith("PROGRESS:")) {
+            fileContentBufferRef.current.push(message);
+            setFileContentBuffer([...fileContentBufferRef.current]);
+            addLog(`Line ${fileContentBufferRef.current.length}: ${message.substring(0, 30)}${message.length > 30 ? '...' : ''}`);
+          }
+          return;
+        }
+
+        // Handle Arduino error responses for file content
+        if (message.startsWith("ERROR:") && isReceivingFileContentRef.current) {
+          isReceivingFileContentRef.current = false;
+          addLog(`Arduino file content error: ${message}`);
+          Alert.alert("File Download Error", `Arduino reported: ${message}`);
+          fileContentBufferRef.current = [];
+          currentDownloadingFilenameRef.current = '';
           return;
         }
 
@@ -811,8 +862,16 @@ function MainAppContent() {
           >
             <Text style={commonStyles.buttonText}>Stop Logging</Text>
           </TouchableOpacity>
+          {/* <TouchableOpacity
+            style={[commonStyles.button, { backgroundColor: '#FF9500' }]}
+            onPress={() => setShowSettingsModal(true)}
+          >
+            <Text style={commonStyles.buttonText}>Settings</Text>
+          </TouchableOpacity> */}
         </View>
       )}
+
+
 
       {/* System Status */}
       {connectedDevice && (
@@ -892,7 +951,7 @@ function MainAppContent() {
         setDryingProcess={setDryingProcess}
       />
 
-      {/* <FileDownloadModal
+      <FileDownloadModal
         isVisible={showFileDownloadModal}
         onClose={() => {
           setShowFileDownloadModal(false);
@@ -902,7 +961,10 @@ function MainAppContent() {
         addLog={addLog}
         sendCommand={sendCommand}
         availableFiles={availableFiles}
-      /> */}
+        fileContentBuffer={fileContentBuffer}
+        currentDownloadingFilename={currentDownloadingFilenameRef.current}
+        isReceivingFileContent={isReceivingFileContentRef.current}
+      />
     </ScrollView>
   );
 }
